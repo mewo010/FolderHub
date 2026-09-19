@@ -24,21 +24,26 @@ jobs:
           cache: 'gradle'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        run: |
+          yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+      - name: Setup debug keystore
+        run: |
+          mkdir -p ~/.android
+          keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" || true
+          cp ~/.android/debug.keystore ./debug.keystore || true
 
       - name: Grant Execute Permission to gradlew
         run: chmod +x ./gradlew
 
       - name: Build Android APK
         run: |
-          # If signing secrets are available, build Release APK; otherwise assemble Debug APK
-          if [ -f "my-upload-key.jks" ] || [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-              echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > my-upload-key.jks
-              export KEYSTORE_PATH="$(pwd)/my-upload-key.jks"
-              export STORE_PASSWORD="${{ secrets.STORE_PASSWORD }}"
-              export KEY_PASSWORD="${{ secrets.KEY_PASSWORD }}"
-            fi
+          # If signing secrets are provided, setup release keystore and build release APK; otherwise assemble debug APK
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > my-upload-key.jks
+            export KEYSTORE_PATH="$(pwd)/my-upload-key.jks"
+            export STORE_PASSWORD="${{ secrets.STORE_PASSWORD }}"
+            export KEY_PASSWORD="${{ secrets.KEY_PASSWORD }}"
             ./gradlew assembleRelease --stacktrace
           else
             ./gradlew assembleDebug --stacktrace
